@@ -1,0 +1,326 @@
+<!DOCTYPE HTML>
+
+<html>
+<head>
+<style>
+pre {
+  display: block;
+  /* font-family: sans-serif ,monospace; */
+	font: normal 1em arial, sans-serif;
+  color: #555;
+  /* white-space: pre; */
+	tab-size: 4;
+  margin: 1em 0;
+	padding: 0 0 16px 0;
+  line-height: 1.5em;
+	/* overflow-x: auto; */
+	white-space: pre-wrap;
+}
+
+</style>
+	<title>RSS Team #</title>
+	<link rel="stylesheet" type="text/css" href="../../css/style.css"><script type="text/x-mathjax-config">MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$']],displayMath: [['$$','$$']],skipTags: ["script","noscript","style","textarea","code"]},TeX: {equationNumbers: {autoNumber: "AMS"}}});</script><script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-MML-AM_CHTML"></script></head>
+	<body><div id="main"><div id="logo"><div id="logo_text"><h1><a href="../.."><span class="logo_colour">RSS Team #9</span></a></h1>
+		<h2>MIT Spring 2019</h2></div></div><div id="header">
+		<div id="menubar"><ul id="menu">
+			<li class=""><a href="../..">Home</a></li>
+			<li class="selected"><a href="../../labs">Labs</a></li>
+			<li><a href="https://youtu.be/PrP86YrPoR0">Video</a></li>
+			<li><a href="https://github.mit.edu/rss2019-#">Github</a></li></ul>
+			</div></div><div id="site_content">
+			<div id="content"><h1>Lab 6</h1>
+	<a href= "https://docs.google.com/presentation/d/1KqCTzzdOE6rkKojY1dL74hmNmRSuOLaCMOrF-TNSyoU/edit?usp=sharing">Lab 6 Briefing Slides</a>
+
+			<h2> RSS Lab 6 Report: Path Planning</h2>
+			<p>Kevin Carlson, Susan Ni, Talia Pelts, Jonathan Samayoa, Vlad Seremet</p>
+			<h3>Table of Contents:</h3>
+<pre>
+	1. Overview and motivations
+	2. Path Planning
+			2.1 Search Based Algorithm: A*
+					2.1.1 Technical Implementation
+				2.2 Sample Based Algorithm: RRT
+					2.2.1 Technical Implementation
+				2.3 Algorithm of Choice: PRM
+					2.3.1 Motivation
+					2.3.2 Technical Implementation
+					2.3.3 Computing the Connectivity Graph
+					2.3.4 A* on the Connectivity Graph
+	3. Pure Pursuit
+			3.1 Technical Implementation
+			3.2 ROS Implementation
+	4. Integration of PRM and Pure Pursuit
+	5. Experimental Evaluation
+			5.1 Path Planning:
+			5.2 Pure Pursuit
+			5.3 Robot Implementation
+	6. Lessons learned
+	7. Potential Improvements</pre>
+
+
+<h3>1. Overview & Motivations</h3>
+<h6>Kevin</h6>
+<pre>	The purpose of this lab was to plan a path between two or more points for the robot to follow. This is important because it covers both path planning and control, two core fundamentals of autonomous vehicle operation. To accomplish this, we implemented three path finding algorithms: A-star (A*), Rapidly-Exploring Random Trees (RRT) and Probabilistic Road Maps (PRM). Based on experimental evaluation of each algorithm's performance in the simulator, we selected PRM to implement on the actual robot. With the implementation and testing of a successful pure pursuit controller, the robot is able to plan and follow a path in a known environment in minimal time.</pre>
+
+<h3>2. Path Planning: </h3>
+<h4>2.1 Search Based Algorithm: A*</h4>
+<h6>Talia</h6>
+<pre>	Our car needs to be able to efficiently map out a short trajectory between specific points. One well known method for path planning is the  A* algorithm. This algorithm takes in a graph and deterministically builds a network of paths from the start point until the end point is reached. A* is not a random algorithm. At each run, the space searched and the final path produced are always the same. The final path is always the lowest cost path available. Thus, A* promises correctness, reliability, and the lowest cost path. However, we will see that it is not necessarily the fastest algorithm.</pre>
+
+<h5>2.1.1 Technical Implementation</h5>
+<pre>	Our implementation of A* expected as input, a dilated 2D occupancy map where each pixel represented a possible location of the robot. The color value of a pixel represented whether or not it was occupied. The dilated nature of the map prevented the robot from cutting corners, since A* treats the robot like a point mass with no width or length. The photo of our dilated map is shown below in figure 1. Each pixel represents a possible vertex in our graph. All pixels that share an edge or a corner are connected to each other through an edge. All pixels above, below, left and right to a given pixel have weight 1. All pixels diagonal to a given pixel have weight 2.It is important to note that this cost assignment was not very accurate, as it did not account for the current orientation of the robot. If the robot were to move left, it would have to rotate 90 degrees before moving to the left, which would take more time, and thus have more cost, than just moving forward.</pre>
+	<figure>
+	<img src="figure1.PNG" alt="Dilated Map" width="100%" height="100%">
+	<figcaption>Fig.1 - Our map is dilated by creating more obstacle pixels around edges and corners.</figcaption>
+	</figure>
+
+<pre>	Given two points, the A* algorithm will always begin from the start point. The algorithm will add the start node to a visited set, set the cost of the start node to 0, and explore the valid neighbors (pixel value of 255) of the start node by adding all of them to a frontier with a calculated priority value. Priority values are determined by summing the cost of getting from the start node to the current node and the current node to its neighbor and by adding the value of a heuristic function. Each time the cost of getting to a specific node from the start point is the lowest cost yet seen for those two nodes, the cost value is updated. The algorithm then continues, picking a node in the frontier of minimum total priority value and exploring its neighbors next.
+	A* is an augmented version of Dijkstra's and a Greedy Best Search Approach. The Dijkstra component of A* comes from visiting nodes in the frontier based on their cost from the start node. Since we use an occupancy grid structure to represent our graph, the cost of moving up, down, left, and right is equivalent to the pixel distance of 1. Diagonal movements have a cost of(2). Therefore, if we would just run Dijkstra's algorithm, the algorithm would visit all nodes up, down, left, and right before making any diagonal frontier movements. This would not be efficient in a graph structure where the end node would be a diagonal distance from the start node as we would end up exploring those nodes later in the algorithm.
+	The Greedy Best Search portion of A* is its use of a heuristic algorithm in updating priority. At each iteration of the algorithm, A* measures the heuristic cost of going from a neighbor to the goal. This is simply a heuristic because the algorithm does not take into account the possibility of obstacles between the neighbor and the goal point. Our implementation of A* simply uses Euclidean distance between the neighbor and the goal. Since we want to explore nodes that are closer to the finish goal than nodes that are farther away, we weigh the priority of our nodes, not only by how far away they are from the start, but approximately how far they are from the finish goal. Using only the heuristic method would not always be appropriate as our algorithm would always prefer diagonal movements directly towards the goal, even if future obstacles would prevent the movement. The frontiers explored and paths outputted by Dijkstra, Greedy Best Search, and A* are shown in Figure 2.</pre>
+
+	<figure>
+	<img src="figure2.PNG" alt="Dijktstra's comparison" width="100%" height="100%">
+	<figcaption>Fig.2 - A side by side comparison of Dijkstra's, Greedy-Best-First, and A* Search. While Greedy-Best-First search visits the least amount of nodes, its final path is not necessarily the shortest path, it visits almost all of the vertices in the graph, making it slow. A* is a happy medium, visiting slightly more vertices than Greedy Best First Search but finding a relatively low cost path.</figcaption>
+	</figure>
+
+	<pre>	Thus, our cost function from a current node to a neighbor is:
+			<b>cost(neighbor) = cost(current) + distance(current, neighbor) + distance(neighbor, goal)</b>
+	Our priority queue was implemented using a minimum heap data structure, which is efficient when the number of edges is expected to be on the order of the number of vertices in the graph. The occupancy grid design of our map meant that every node had at most 8 edges, and thus E = O(8|V|) = O(|V|) so a minimum heap data structure worked most efficiently.
+	The benefit of using A* was that regardless of the run, we would always get the same path, check the same number of nodes, and get the shortest cost path (depending on our cost calculating methods, this could differ for each implementation). However, A*'s systematic approach to checking all neighboring vertices could cause it to visit many nodes, making it slow, especially with our an occupancy grid with many nodes. The average run time for A* was 28.69 seconds in our test cases. Some pictures of our A* implementation in the simulator are shown in Figure 3. Green dots represents our frontier building and the red line represents our final trajectory from the green marker to the red marker.</pre>
+	<figure>
+	<img src="figure3.PNG" alt="A* Search Map" width="100%" height="100%">
+	<figcaption>Fig.3 - The green space in the figure on the left represents node searching in teh Stata basement. Note that nodes closer to the final red goal ar esearched first towards the end of the algorithm. The red trajectory on the right indicates the lowest cost path found by A*.</figcaption>
+	</figure>
+
+<h4>2.2 Sample Based Algorithm: RRT</h4>
+<h6>Jonathan</h6>
+<pre>	Our car needs to be able to map out a trajectory between specific points efficiently. One well known method for path planning is a rapidly-exploring random tree (RRT). This algorithm takes random samples and builds a network of paths to and from these samples, until a path is found from a start to end point.</pre>
+<h5>2.2.1	Technical Implementation</h5>
+<pre>	Given two points, RRT begins by growing a tree from the start point. It will sample a new point randomly on the map, a node. A connection will between this new node and the nearest pre-existing node in the tree will be created, if allowed. After completion, this process will repeat, until one of our nodes is within a reasonable distance of the goal point(Enter Radius here). We then state that we have found a path, and our algorithm has finished.
+	The way our RRT randomly samples us using a uniform distribution across the entire map space. This means that all points on the map are equally likely to be chosen. The reason we decided to do this versus weighing specific points more probabilistically likely than others is because of the nature of the map we were given. Our map is of the Stata basement, which is a convex space. If we had weighed points closer to the goal more likely than those further away, we could become trapped in a local minima do to the convex nature of our environment. Another aspect we had to take into consideration are the obstacles, in this case the basement walls. A line between two points is the shortest path, and if we had implemented this probabilistic approach of weighing points closer to the goal more, our algorithm could repeatedly chose points inside a wall more often than not. We thought that this would be highly inefficient, and decided that because we did not want our algorithm to assume the environment that it was given, a uniform probabilistic distribution made more sense.
+	To create a new node, our RRT would randomly sample the map, and then check two things. Firstly, check to make sure a path between our random node and the nearest pre-existing node to it does not go through a wall. If it did, we resampled until we obtained a node that did not create a path through a wall. Secondly, we checked the distance between these two nodes. We limited the length of all our node-to-node paths by a growth factor of 2m. If the distance between the nodes was too great, a new node was created along the line to the random sample at the maximum specified distance (in this case 2m). In a sense, the random sampling determines the direction of the growth of the tree while our growth factor determines the rate at which the tree grows.
+	One thing to note about RRT is that it is not optimum for convex spaces, like the map we were working with. Because of this, our run times for path planning would vary drastically. In the figure below, you can see the RRT being constructed between two points. Running this trial five separate times with the same points lead to a runtime as low as 2.649 seconds and a run time as high as 30.376 seconds. The randomness of this algorithm and the convexity of our environment result in our runtimes vary drastically.
+	Another thing to note is due to the randomness of this algorithm, the path we obtain is not optimal for our car to maneuver. The path itself is usually very jagged and suboptimal. In real life we do not want our car following these jagged trajectories, and so another path-planning algorithm might be better suited for this specific case.</pre>
+	<figure>
+	<img src="figure4.gif" alt="RRT Building Between two points" width="100%" height="100%">
+	<figcaption>Fig.4 - The RRT Algorithm is building a path between two points marked on the map.</figcaption>
+	</figure>
+	<p><br>
+	<figure>
+	<img src="figure5.gif" alt="RRT Building Loop" width="100%" height="100%">
+	<figcaption>Fig.5 - RRT creates a loop path around the Stata basement. Notice the randomness of the algorithm has it explore in non-optimal locations.</figcaption>
+	</figure>
+<p><br><br>
+<h4>2.3 Algorithm of Choice: Probabilistic RoadMaps (PRM)</h4>
+<h6>Vlad</h6>
+
+<h5>2.3.1 Motivation</h5>
+	<pre>	After implementing both A* and RRT, we found that both of these algorithms have some disadvantages. In the case of A*, the difficulty arises in shrinking the configuration space. In our implementation, each pixel represents a node, which creates a very large and dense graph, which in turn leads to slow runtime. Using circle space or grouping pixels together could alleviate this problem but these approaches often don't lead to an accurate representation of the connectivity of the configuration space. RRT* does not suffer from this problem, since it samples points randomly. This, however, leads to RRT exploring directions away from the goal, doing useless work and wasting precious time.</pre>
+	<figure>
+	<img src="figure6.gif" alt="Building Graph" width="75%" height="75%">
+	<figcaption>Fig.6 - The connectivity graph of the Stata Basement (in blue)</figcaption>
+	</figure>
+	<pre>	PRM solves both of these problems. It shrinks the configuration space by a factor of 1000 while accurately representing its connectivity. After the connectivity graph is created, PRM uses the power of A* to find the shortest path from source to target with an average runtime of 100ms.</pre>
+
+<h5>2.3.2 Technical Implementation</h5>
+<pre>	PRM works in two steps. First, it takes about 30 seconds to precompute a connectivity graph based on a predefined map of the environment and after this initial step it can leverage this graph to compute trajectories very fast. </pre>
+
+<h5>2.3.3 Computing the Connectivity Graph</h5>
+	<pre>	We start with a random point s.
+	At each iteration we add another random point r and draw an edge to its closest neighbor nbr, if
+	deg(nbr) < k, where k is a parameter representing the maximum number of neighbours per node (in our implementation k = 15). Limiting the number of neighbors per node prevents the graph from becoming too dense. Denser graphs take longer to explore and they don't necessarily represent the connectivity of the configuration space more accurately,
+	If the edge (r, nbr) does not intersect any obstacles, we add it to the graph, otherwise we remove it. As the number of iterations increases, the connectivity graph gets closer and closer to the connectivity of our configuration space. Once the graph is complete, we save it to a file and then we load it from memory on startup.
+	It's important to note that the nodes in this graph are pixels on the map. If the pixel is white, the node lies in the free space. Otherwise, the node overlaps with an obstacle on the map, so we remove it from the graph.
+	To check if a line segment crosses any obstacles, we created a function that returns all the pixels that overlap with the segment. If any of these pixels are not white, this segment crosses an obstacle, so it is not added to the graph as an edge.</pre>
+
+	<figure>
+	<img src="figure7.gif" alt="Computing Connectivity Graph" width="65%" height="65%">
+	<figcaption>Fig.7 - Computing the Connectivity Graph</figcaption>
+	</figure>
+
+<p><br>
+<h5>2.3.4 A* on the Connectivity Graph</h5>
+<pre>Our lab requires us to be able to compute paths between any two nodes (source, target), and it is not guaranteed that these two nodes are actually in the graph. To compute the shortest path, we first find the closest nodes in the connectivity graph to source and target respectively. Let's name these nodes start and finish.
+	Now beginning at start, A* checks all of its adjacent nodes and adds them to a priority queue sorted based on euclidean distance to finish. Then, it pops nodes out of this queue and adds their neighbours to the priority queue until finish is reached, at which point the algorithm returns a list of nodes that forms the path from start to finish.</pre>
+
+	<figure>
+	<img src="figure8.gif" alt="Shortest Path PRM" width="75%" height="75%">
+	<figcaption>Fig.8 - Finding shortest path in Stata basement between two points using PRM.</figcaption>
+	</figure>
+<!-- italicize certain aspects here later -->
+
+
+<h3>3 Pure Pursuit</h3>
+<h6>Susan</h6><pre>
+	Once a trajectory to follow is found through one of the path planning algorithms, our pure pursuit algorithm calculates the corresponding drive commands to allow the car to follow the trajectory. The trajectories are represented by piecewise points, so the trajectory is a series of line segments connecting the points.</pre>
+
+<h4>3.1 Technical Implementation</h4>
+	<pre>Using the estimated position of the robot determined by the localization algorithm of the previous lab, the pure pursuit algorithm finds a goal point on the trajectory and calculates a steering angle and speed to drive to that goal point. As seen in figure 9, the algorithm begins by finding the line segment in the trajectory that is closest to the car by calculating the minimum distance from each line segment to the car. Then, the algorithm begins iterating through all of the line segments in the trajectory starting at the segment that is closest to the car to find a goal point on the trajectory that is one "lookahead distance" away from the car. The lookahead distance l<sub>d</sub> is a parameter of the algorithm that determines how far away the goal points are from the car. The goal point can be represented by the intersection of a circle with a radius of length l<sub>d</sub> centered at the position of the car and a line segment in the trajectory. If there are two points of intersection with the lookahead circle and a line segment, then the goal point will be the point that is farther along the trajectory, which can be easily distinguished if the line segment is parametrized when calculating the intersection.
+</pre>
+
+<figure>
+<img src="figure9.png" alt="Lookahead" width="75%" height="75%">
+<figcaption>Fig.9 - Lookahead distance</figcaption>
+</figure>
+
+<pre>The steering angle required to reach the goal point then becomes a function of the lookahead distance, the car's angle from the line segment made from the goal point and the car's position, and the car's geometry. One edge case that was accounted for in our algorithm was when the car was close to the end of the nearest line segment. The algorithm would still begin iterating over the segments starting at the nearest segment, but would start looking behind to a section of the trajectory that
+	was already traversed if the closest segment contained a point that was one lookahead distance away from the car. To prevent this behavior, we checked if the car was within one lookahead distance to the end of the nearest line segment, and if it was, then the algorithm would begin iterating on next line segment in the trajectory after the nearest line segment.
+	The geometry of pure pursuit is illustrated in figure 10. Given the estimated position of the car (x, y, <span style='font-size:12px;'>&#952;</span> ) and the goal point (g<sub>x</sub>, g<sub>y</sub>), the car's angle from the line segment made from the goal point and the car's position follows the equation: </pre>
+	<figure>
+	<img src="eq1.PNG" alt="EQ!" width="75%" height="75%">
+	</figure>
+	<p><br>
+	<figure>
+	<img src="figure10.png" alt="Steering Angle Diagram" width="45%" height="45%">
+	<figcaption>Fig.10 - Steering Angle Diagram</figcaption>
+	</figure>
+
+</pre>
+
+
+	The radius of the arc the car has to follow to reach the goal point can be calculated using the law of sines. The radius r is then:</pre>
+	<figure>
+	<img src="radius_eq.png" alt="Radius Eq" width="25%" height="25%">
+	</figure>
+
+<pre>
+	Following the car's geometry, the steering angle required for the car to follow the arc is:</pre>
+	<figure>
+	<img src="eq2.PNG" alt="EQ2" width="75%" height="75%">
+	</figure>
+<pre>
+	Since we want the car to drive faster and look ahead farther when driving on a straight section of a trajectory, we varied speed and lookahead distance based on radius. When the radius of an arc is large, it is approximately a straight line, so we made speed proportional to radius. We also made the lookahead distance proportional to radius in a sense, but instead of formulating an equation to have lookahead distance vary with radius, we descritized it. Our radius calculations will have noise and jump around in value, which, for example, would cause the car to look too far ahead when there is a spike in the radius calculation. With this discretization, we ensured that the lookahead distance was a fixed value for various ranges of radii and would never be too large or too small. To determine the gain factor for the speed calculation and the exact values to set for the lookahead distances based on different ranges of radii, we simply used trial and error until our car did not do extreme corner cutting.</pre>
+
+<h4>3.2 ROS Implementation</h4>
+<figure>
+<img src="figure11.png" alt="ROS Topics and Nodes" width="100%" height="100%">
+<figcaption>Fig.11 - ROS Topics and Nodes</figcaption>
+</figure>
+<pre>
+		The nodes and topics of the path planner passed around map information for the path planning algorithm to find a trajectory in, which the pure pursuit algorithm could use to send driving commands to the car. Figure 11 displays the rqt graph including the nodes and topics used during path planning on the simulator. When the '/map_server' node publishes a map to the '/map' topic, the '/path_planner' node subscribes to receive the map in which the trajectory to be followed can be
+	found. When the '/pure_pursuit' node receives a trajectory from the '/path_planner' node via the '/trajectory/current' topic and an estimate of the car's position from the '/particle_filter' node via the '/pf/viz/inferred_pose' topic, the pure pursuit algorithm runs to calculate the appropriate steering angle and speed for the car to follow the trajectory. This driving command is sent via a drive topic, which is '/drive' in the simulator and '/vesc/high_level/ackermann_cmd_mux/input/nav_0' on the real car.</pre>
+
+<h3>4 Integration of PRM and Pure Pursuit</h3>
+<h6>Jonathan</h6>
+<pre>	We needed to allow our PRM algorithm to communicate with pure pursuit. We first click points on the map and have our PRM build up a trajectory between those points. Then, PRM publishes this newly generated trajectory to the 'trajectory/current' topic, which pure pursuit then takes in and uses to create the appropriate speed and steering instructions for the car. This integration effectively allows us to click any two (or more) points on our map, and have our car move between them.</pre>
+
+<h3>5 Experimental Evaluation</h3>
+<h4>5.1 Path Planning</h4>
+<h6>Kevin</h6>
+<pre>
+		To evaluate the performance of each of the three path planning algorithms, we measured execution time, nodes visited, and the path distance of each algorithm. We selected a start and end point pair on opposite corners of the map. In Rviz, the start coordinate was (-20, -1.13) and the end coordinate was (-54.5, 33.9), with a Euclidean distance of 49.7 between the points. This start and end point pair was passed into each algorithm five times to gather the data. Following this test, we ran the
+	A* and RRT algorithm using 4 waypoints to form a loop through the stata map, again measuring the execution time, nodes visited, and path distance.
+
+		For A*, the five samples yielded a path distance of 67.63m with an average run time of 28.69 seconds. The algorithm visited 127794 nodes (1 pixel = 1 node) for all five tests, which is expected (figure 12). This data demonstrated the anticipated behavior of the A* algorithm at finding a short path relative to the Euclidian distance, but taking a long time. For determining a loop path using waypoints, our A* algorithm calculated a path of distance 151.202m in 43.78 seconds. This result shows
+	the node prioritization of A* in action as the algorithm only visited 47,891 nodes to determine this longer path.</pre>
+	<figure>
+	<img src="figure12.gif" alt="A* GIF" width="100%" height="100%">
+	<figcaption>Fig.12 - This figure shows the progression of the algorithm as it considers each o fthe 127,794 nodes to ultimately determine the final path ofn the right. The final path was the same for all five A* trials.</figcaption>
+	</figure>
+
+	<p><br>
+
+	<figure>
+	<img src="figure12_1.PNG" alt="A* final path between two points" width="75%" height="75%">
+	</figure>
+
+<pre>
+
+
+		For RRT, the five samples (see Table 1) yielded an average path distance of 71.8m with a standard deviation of 3.3m. The tests resulted in an average run time of 9.422 seconds with a standard deviation of 10.57 seconds. The algorithm considered an average of 441.4 nodes with a standard deviation of 286.4 nodes. The large standard deviations in the run time and nodes considered is due to the randomness of this algorithm and was expected. See figure 13 for a visualization of these tests. The stata basement loop test using 4 waypoints yielded a path distance of 162.18m, a run time of 44.024 seconds, and 1872 considered nodes. This test had similar results to the A* algorithm, but, because of the randomness of the algorithm, the results are not consistent unlike A*.</pre>
+
+	<figure>
+	<img src="table1.PNG" alt="Table of RRT Trials" width="100%" height="100%">
+	<figcaption>Table 1</figcaption>
+	</figure>
+	<p><br>
+	<figure>
+	<img src="figure4.gif" alt="RRT Building Between two points" width="100%" height="100%">
+	<figcaption>Fig.13 - Figure shows RRT in action during one of the five trials. The random node consideration is demonstrated through the black tree expansion, and the red line shows the final path.</figcaption>
+	</figure>
+<p><br>
+<pre>
+		For PRM, the five samples yielded a path distance of 69.78m and an average runtime of 0.159 seconds after visiting 44 nodes. The data gathered for this algorithm outperforms A* and RRT due to the precomputed graph made by this algorithm (see figure 14)</pre>
+		<figure>
+		<img src="figure14.PNG" alt="RRT Building Between two points" width="100%" height="100%">
+		<figcaption>Fig.14 - Visual comparison of the measured runtime, distance traveled and nodes visited for each algorithm with a start position of (-20, -1.13) and an end position of (-54.5, 33.9) in Rviz.</figcaption>
+		</figure>
+
+<p><br><br>
+<h4>5.2 Pure Pursuit</h4>
+<h6>Susan</h6>
+<h5>		Results on Given Trajectory, Hand Drawn Trajectory, and PRM Trajectory</h5>
+<figure>
+<img src="figure15.gif" alt="Pure Pursuit Error Plot" width="90%" height="90%">
+<figcaption>Fig.15 - Error plot of Pure Pursuit algorithm in Stata basement loop.</figcaption>
+</figure>
+<p><br>
+<figure>
+<img src="figure16.png" alt="Pure Pursuit Trial Errors" width="90%" height="90%">
+<figcaption>Fig.16 - Turn error plots of Pure Pursuit algorithm in Stata basement loop.</figcaption>
+</figure>
+<p><br>
+<figure>
+<img src="figure17.gif" alt="Handdrawn error plot" width="90%" height="90%">
+<figcaption>Fig.17 - Error plot from hand drawn trajectory.</figcaption>
+</figure>
+<pre>
+	On the default loop in the simulator, our pure pursuit algorithm had negligible distance errors on the straight segments, and errors of less than 0.22 m on the turns. During the 6 major turns of the loop, there were average distance errors (in order of turn number) of 0.019 m, 0.023 m, 0.080 m, 0.047 m, 0.097 m, and 0.053 m, all of which were less than 10 cm.
+
+	We also ran the pure pursuit algorithm on a hand-drawn trajectory on the stata basement map, achieving distance errors of less than 0.4 with again negligible error on straight segments of the trajectories. The greater errors seen in this hand-drawn path compared to the previous default loop can be attributed the variability of the car's position estimated by the localization algorithm and the sharper and more frequent turns in this trajectory.</pre>
+
+	<figure>
+	<img src="figure18.gif" alt="PRM Error" width="90%" height="90%">
+	<figcaption>Fig.18 - Error plot of Pure Pursuit using trajectory built by PRM.</figcaption>
+	</figure>
+
+<pre>
+	Lastly, we ran the pure pursuit algorithm on a trajectory found by the probabilistic road map path planning algorithm created with 4 chosen waypoints. The distance errors in this trial were slightly higher than in the hand-drawn trajectory, but this is expected since the trajectory created by the path planning algorithm has almost no straight segments in which the car can adjust its distance error from the trajectory.</pre>
+
+<h4>5.3 Robot Implementation</h4>
+<pre>
+	Integration of PRM and Pure Pursuit in the Robot (time it if it works for results)</pre>
+	<figure>
+	<img src="figure19.gif" alt="Real Life Vid" width="100%" height="100%">
+	<figcaption>Fig.19 - Video of car following trajectory in real life (Pure Pursuit and PRM).</figcaption>
+	</figure>
+	<p><br>
+	<figure>
+	<img src="figure20.gif" alt="PRM Error" width="100%" height="100%">
+	<figcaption>Fig.20 - Rviz representation of car driving (as in figure 19).</figcaption>
+	</figure>
+<h3>6 Lessons Learned</h3>
+<h6>Susan</h6>
+<pre>
+		One important lesson that we learned during this lab is the importance of our map representation. We wanted to make sure all our path planners did not create paths too close to the walls, as our robot would then crash. We fixed this by creating a dilated map, so that the path planners interpreted the walls to be more offset, and paths would be created further from them. Along with this, we also learned that reading the map as pixel values does not necessarily result in the best path planners. For example, when we ran our A* trials, because we said that each pixel represented a node, the number of nodes considered was 127794. This cause our A* to be very slow in comparison to our other two algorithms.
+		We also learned about the trade-offs between a probabilistic approach to path planning and a deterministic approach to path planning. The deterministic approach gives us the best path to follow, but takes too. much time to calculate. The probabilistic approach can be extremely fast, but will almost never find the optimal path (and also due to our convex map nature, can randomly have long runtimes). If we want our robot to get somewhere as fast as possible, the the probabilistic approach tends to be better because of how fast it calculates a path. In contrast, if we want our robot to move optimally between two points, then the deterministic approach is better, as it results in a cleaner and shorter path. </pre>
+
+<h3>7 Potential Improvements</h3>
+<h6>Vlad</h6>
+<pre>
+	The team identified areas for improvement in regard to both path planning algorithms and the pure pursuit controller.
+
+<b>Improving A*</b>
+
+The map could be better discretized to improve the speed of the path planning algorithms, especially the A* algorithm. The discretization could take the form of looking at the map in squares of 10 by 10 pixels or looking at pixels some distance away from the current node. This would reduce the number of nodes to visit, which would improve the speed of our algorithms.
+
+<b>Improving generated trajectories</b>
+
+One downside of using PRM for path planning is that the paths are often quite rough, with sharp turns, which makes our pure pursuit controller behave erratically. This can be solve by using dubin curves as our heuristic when we compute the shortest path. Dubin curves take into account the steering angle of the car and the kinematic constraints of the akermann drive, which results in paths that are easier to follow.
+
+<b>Improving the Pure Pursuit Controller</b>
+
+Additionally, we can improve our pure pursuit controller to work seamlessly with localization. We noticed during testing that the pure pursuit controller is very sensitive to inaccuracies in the localization such that the robot would make drastic turns unexpectedly. Tuning the pure pursuit parameters and the gaussian of the sensor model in the localization could help prevent this issue from arising in the future.</pre>
+
+
+
+
+
+
+
+
+
+
+
+
+</div></div></div></body></html>
